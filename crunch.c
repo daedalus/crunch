@@ -1,6 +1,6 @@
 /*  character-set based brute-forcing algorithm
  *  Copyright (C) 2004 by mimayin@aciiid.ath.cx
- *  Copyright (C) 2008, 2009, 2010, 2011, 2012 by bofh28@gmail.com
+ *  Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 by bofh28@gmail.com
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -135,16 +135,20 @@
  *  version 3.1 make -l take a string so you can have @ and characters
  *              add TB and PB to output size
  *              fix comments referencing $ that should be ,
- *              add -e to end generation after user specified string (useful when piping crunch to a program)
+ *              add -e to end generation after user specified string (useful
+ *                 when piping crunch to a program)
  *  version 3.2 add -d to limit duplicate characters
  *              put correct function name into error messages to help with debugging
  *              fix Makefile uninstall to remove crunch directory and install GPL.TXT
  *              removed flag5 as it wasn't needed
- *              if you press Ctrl-C crunch will now print where it stops so you can resume piping crunch into another program
+ *              if you press Ctrl-C crunch will now print where it stops so you
+ *                 can resume piping crunch into another program
  *  version 3.3 add more information to help section
  *              Fixed mem leaks, invalid comparisons - fixed by JasonC
- *              Error messages and startup summary now go to stderr (-u now unnecessary) - fixed by JasonC
- *              Fixed startup delay due to long sequences of dupe-skipped strings - fixed by JasonC
+ *              Error messages and startup summary now go to stderr (-u now 
+ *                 unnecessary) - fixed by JasonC
+ *              Fixed startup delay due to long sequences of dupe-skipped 
+ *                 strings - fixed by JasonC
  *              Added unicode support - written by JasonC
  *              fix write and compress error - reported and fixed by amontero
  *              fix printpercentage -> linecounter should be ->linetotal
@@ -154,6 +158,12 @@
  *                 reorder flags in Makefile so crunch can compile successfully
  *                 remove finall variable from printpercentage
  *                 remove loaded from main
+ *  version 3.5 make changes to the man based on suggestions from Jari Aalto
+ *              pass pidret to void to make warning go away
+ *              rename GPL.TXT to COPYING
+ *              removed need for -o to use -c i.e. you can use -c any time now
+ *              fixed resume
+ *              fixed linecount and size when using -c and/or -e
  * 
  *  TODO: Listed in no particular order
  *         add resume support to permute (I am not sure this is possible)
@@ -165,9 +175,8 @@
  *         specify multiple charset names using -f i.e. -f charset.lst + ualpha 123 +
  *         make permute use -e
  *         revamp compression part of renamefile 7z doesn't delete original file
- *         maybe fork compression part of renamefile
  *         size calculations are wrong when min or max is larger than 12
- *         newer gcc complains about pidret as not being used
+ *         write word to temp file for resuming after power outage
  *
  *  usage: ./crunch <min-len> <max-len> [charset]
  *  e.g: ./crunch 3 7 abcdef
@@ -223,7 +232,8 @@
  *
  *  Compiles on: linux (32 and 64 bit Ubuntu for sure, 32 and 64 bit Linux in
  *     general works.  I have received word that crunch compiles on MacOS.
- *  It should compile on freebsd and the other Unix and Linux OSs but I don't
+ *     Juan reports Freebsd x64, i386 and OSX Mountain Lion compiles and works
+ *     perfectly. It should compile on the other Unix and Linux OSs but I don't
  *     don't have access to any of the those systems.  Please let me know.
  */
 
@@ -256,7 +266,7 @@ static const wchar_t def_low_charset[] = L"abcdefghijklmnopqrstuvwxyz";
 static const wchar_t def_upp_charset[] = L"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 static const wchar_t def_num_charset[] = L"0123456789";
 static const wchar_t def_sym_charset[] = L"!@#$%^&*()-_+=~`[]{}|\\:;\"'<>,.?/ ";
-static const char version[] = "3.4";
+static const char version[] = "3.5";
 
 static size_t inc[128];
 static size_t numofelements = 0;
@@ -479,7 +489,6 @@ static wchar_t *dupwcs(const wchar_t *s) {
 
   return p;
 }
-
 
 /* return 0 if string1 does not comply with options.pattern and options.literalstring */
 static int check_member(const wchar_t *string1, const options_type* options) {
@@ -1045,8 +1054,14 @@ int start_point = 0, end_point = 0; /* bool; whether to consider a starting or e
       temp = calculate_with_pattern(options.min_string, options.max_string, options);
     }
 
-    *lines = temp;
-    *bytes = temp * (max + 1);
+    if ((linecount > 0) && (options.endstring==NULL)) {
+      *lines = linecount;
+      *bytes = linecount * (max + 1);
+    }
+    else {
+      *lines = temp;
+      *bytes = temp * (max + 1);
+    }
 
     extra_unicode_bytes = 0;
 
@@ -1157,8 +1172,15 @@ int start_point = 0, end_point = 0; /* bool; whether to consider a starting or e
       else
         temp = (unsigned long long)pow((double)options.clen, (double)max);
     }
-    *lines += temp;
-    *bytes += temp * (max + 1);
+
+    if ((linecount > 0) && (options.endstring==NULL)) {
+      *lines = linecount;
+      *bytes = linecount * (max + 1);
+    }
+    else {
+      *lines = temp;
+      *bytes = temp * (max + 1);
+    }
 
     if (output_unicode!=0) {
       if (suppress_finalsize==0 && check_dupes==0) {
@@ -1386,7 +1408,7 @@ unsigned long long calc = 0;
       calc = 100L * counter / linec;
 
     if (calc < 100)
-      fprintf(stderr,"%3llu%%\n", calc);
+      fprintf(stderr,"\ncrunch: %3llu%% completed generating output\n", calc);
   }
 
   pthread_exit(NULL);
@@ -1403,19 +1425,12 @@ char *compoutput; /* build archive string for 7z */
 char *findit = NULL;   /* holds location of / character */
 int status;     /* rename returns int */
 char buff[512]; /* buffer to hold line from wordlist */
-pid_t pid, pidret; /* pid and pid return */
+pid_t pid; /*  pid and pid return */
 
   errno=0;
   memset(buff,0,sizeof(buff));
 
-  /* Suggestion: In the printed output include some indication that this is the
-    overall percentage rather than the current file progress here. -jC */
-
-  /*
-  fprintf(stderr,"%3d%%\n", (int)(100L * my_thread.bytetotal / my_thread.finalfilesize));
-  */
-
-  fprintf(stderr,"%3d%%\n", (int)(100L * my_thread.linetotal / my_thread.finallinecount));
+  fprintf(stderr,"\ncrunch: %3d%% completed generating output\n", (int)(100L * my_thread.linetotal / my_thread.finallinecount));
 
   finalnewfile = calloc((end*3)+5+strlen(fpath), sizeof(char)); /* max length will be 3x outname */
   if (finalnewfile == NULL) {
@@ -1497,7 +1512,7 @@ pid_t pid, pidret; /* pid and pid return */
   if (compressalgo != NULL) {
     /*@-type@*/
     pid = fork();
-    pidret = wait(&status);
+    (void)wait(&status);
 
     /*@=type@*/
     if (pid == 0) {
@@ -1572,6 +1587,7 @@ pid_t pid, pidret; /* pid and pid return */
   if (compressalgo != NULL)
     free(comptype);
 }
+
 
 static void printpermutepattern(const wchar_t *block2, const wchar_t *pattern, const wchar_t *literalstring, wchar_t **wordarray) {
 size_t j, t;
@@ -2016,10 +2032,11 @@ size_t outlen; /* temp for size of narrow output string */
 
     if (outputfilename == NULL) { /* user wants to display words on screen */
       if (options.endstring == NULL) {
-        while (!finished(block2,options) && !ctrlbreak) {
+        while ((!finished(block2,options) && !ctrlbreak) && (my_thread.linecounter < (linecount-1))) {
           if (!too_many_duplicates(block2, options)) {
             (void)make_narrow_string(gconvbuffer,block2,gconvlen);
             fprintf(fptr, "%s\n", gconvbuffer);
+            my_thread.linecounter++;
           }
           increment(block2, options);
         }
@@ -2027,9 +2044,12 @@ size_t outlen; /* temp for size of narrow output string */
           (void)make_narrow_string(gconvbuffer,block2,gconvlen);
           fprintf(fptr, "%s\n", gconvbuffer);
         }
+        if (my_thread.linecounter == (linecount-1)) {
+          goto killloop;
+        }
       }
       else {
-        while (!finished(block2,options) && !ctrlbreak && (wcsncmp(block2,options.endstring,wcslen(options.endstring)) != 0)) {
+        while (!finished(block2,options) && !ctrlbreak && (wcsncmp(block2,options.endstring,wcslen(options.endstring)) != 0) ) {
           if (!too_many_duplicates(block2, options)) {
             (void)make_narrow_string(gconvbuffer,block2,gconvlen);
             fprintf(fptr, "%s\n", gconvbuffer);
@@ -2960,6 +2980,11 @@ pthread_t threads;
   }
 
   /* start processing */
+  options.startstring = startblock;
+  options.min = min;
+  fill_minmax_strings(&options);
+  fill_pattern_info(&options);
+
   if (resume == 1) {
     if (startblock != NULL) {
       fprintf(stderr,"you cannot specify a startblock and resume\n");
@@ -2979,10 +3004,6 @@ pthread_t threads;
     if (fpath != NULL)
       (void)remove(fpath);
   }
-  options.startstring = startblock;
-  options.min = min;
-  fill_minmax_strings(&options);
-  fill_pattern_info(&options);
 
   if (flag == 0) { /* chunk */
     count_strings(&my_thread.linecounter, &my_thread.finalfilesize, options);
