@@ -225,8 +225,7 @@
  *                the ,'s will change with uppercase letters
  *                the %'s will change with numbers
  *                the ^'s will change with symbols
- *  -u          : only print words; supress file size information, aka unheard
- *                NOT NEEDED ANYMORE
+ *  -u          : The -u option disables the printpercentage thread.  This should be the last option.
  *  -z          : adds support to compress the generated output.  Must be used
  *                with -o option.  Only supports gzip, bzip, lzma, and 7z.
  *
