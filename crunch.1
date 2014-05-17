@@ -18,7 +18,7 @@
 \" You should have received a copy of the GNU General Public License
 \" along with Crunch.  If not, see <http://www.gnu.org/licenses/>.
 
-.TH CRUNCH "1" "December 2013" "Version 3.5"
+.TH CRUNCH "1" "May 2014" "Version 3.6"
 .SH NAME
 crunch \- generate wordlists from a character set
 .SH SYNOPSIS
@@ -98,7 +98,7 @@ Specifies a pattern, eg: @@god@@@@ where the only the @'s, ,'s, %'s, and ^'s wil
 .HP
 \-u
 .br
-No longer needed.  This entry is only kept for reference.  By default crunch will tell you how much data and how many lines are about to be generated.  The \-u option suppresses this information so you can pipe the output from crunch to another program.
+The \-u option disables the printpercentage thread.  This should be the last option.
 .HP
 \-z gzip, bzip2, lzma, and 7z
 .br

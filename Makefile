@@ -22,9 +22,12 @@
 #	For standard FHS directory structure install, use command:
 #	make PREFIX=/usr INSTALL_OPTIONS=geninstall
 
+# detect Darwin = OS X enviro
+UNAME_LOOKUP = $(shell uname -s)
+
 # General variables
 PACKAGE	    = crunch
-VERSION	    = 3.5
+VERSION	    = 3.6
 PREFIX	    = /usr
 DISTDIR	    = $(PACKAGE)-$(VERSION)
 DISTFILES   = crunch.c crunch.1 charset.lst
@@ -33,8 +36,8 @@ LIBDIR	    = $(PREFIX)/lib/$(PACKAGE)
 SHAREDIR    = $(PREFIX)/share/$(PACKAGE)
 DOCDIR	    = $(PREFIX)/share/doc/$(PACKAGE)
 MANDIR	    = $(PREFIX)/share/man/man1
-BTBINDIR    = /pentest/passwords/$(PACKAGE)
-INSTALL	    = $(shell which install)
+
+INSTALL	    = sudo $(shell which install)
 CC	    = $(shell which gcc)
 LIBFLAGS    = -lm
 THREADFLAGS = -pthread
@@ -43,7 +46,18 @@ LINTFLAGS   = -Wall -pedantic
 CFLAGS_STD  = $(THREADFLAGS) $(LINTFLAGS) -std=c99
 VCFLAGS	    = $(CFLAGS_STD) $(OPTFLAGS)
 LFS	    = $(shell getconf POSIX_V6_ILP32_OFFBIG_CFLAGS)
-INSTALL_OPTIONS = -o root -g root
+
+ifeq ($(UNAME_LOOKUP),Darwin)
+#Darwin = OS X, and os x does not use root root as stated in email
+  INSTALL_OPTIONS = -g wheel -o root
+# changing the CC flag from gcc is optional but Apple recommneds using LLVM clang compiler instad of gcc so it's a good practice to do so in an OS X enviro, alas not compulsory 
+  CC = $(shell which cc)
+#LFS flag HAS TO BE reset or it's a no-go :(
+ LFS=""  
+else
+#non-mac as you were 
+  INSTALL_OPTIONS = -g root -o root
+endif
 
 # Default target
 all: build
@@ -70,34 +84,19 @@ clean:
 # Install generic target
 install: build
 	@echo "Creating directories..."
-	$(INSTALL) -d -m 755 $(INSTALL_OPTIONS) \
+	$(INSTALL) -d $(INSTALL_OPTIONS) \
 		$(DESTDIR)$(BINDIR) \
 		$(DESTDIR)$(MANDIR) \
 		$(DESTDIR)$(SHAREDIR) \
 		$(DESTDIR)$(DOCDIR)
 	@echo "Copying binary..."
-	$(INSTALL) crunch -m 755 $(INSTALL_OPTIONS) $(DESTDIR)$(BINDIR)
+	$(INSTALL) crunch $(DESTDIR)$(BINDIR)
 	@echo "Copying charset.lst..."
-	$(INSTALL) charset.lst -m 644 $(INSTALL_OPTIONS) $(DESTDIR)$(SHAREDIR)
+	$(INSTALL) charset.lst $(DESTDIR)$(SHAREDIR)
 	@echo "Copying COPYING..."
-	$(INSTALL) COPYING -m 644 $(INSTALL_OPTIONS) $(DESTDIR)$(DOCDIR)
+	$(INSTALL) COPYING $(DESTDIR)$(DOCDIR)
 	@echo "Installing man page..."
-	$(INSTALL) crunch.1 -m 644 $(INSTALL_OPTIONS) $(DESTDIR)$(MANDIR)
-	@echo ""
-
-# Install BT specific target
-btinstall: build
-	@echo "Creating directories..."
-	$(INSTALL) -d -m 755 $(INSTALL_OPTIONS) $(BTBINDIR)
-	$(INSTALL) -d -m 755 $(INSTALL_OPTIONS) $(MANDIR)
-	@echo "Copying binary..."
-	$(INSTALL) crunch -m 755 $(INSTALL_OPTIONS) $(BTBINDIR)
-	@echo "Copying charset.lst..."
-	$(INSTALL) charset.lst -m 644 $(INSTALL_OPTIONS) $(BTBINDIR)
-	@echo "Copying COPYING..."
-	$(INSTALL) COPYING -m 644 $(INSTALL_OPTIONS) $(BTBINDIR)
-	@echo "Installing man page..."
-	$(INSTALL) crunch.1 -m 644 $(INSTALL_OPTIONS) $(MANDIR)
+	$(INSTALL) crunch.1 $(DESTDIR)$(MANDIR)
 	@echo ""
 
 # Uninstall target
